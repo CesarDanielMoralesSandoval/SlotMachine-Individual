@@ -40,4 +40,23 @@ public class SlotMachineContestTest
             assertTrue(acciones.length <= 10000);
         }
     }
+    /**
+     * Comprueba que solve(n) limite el tamaño de la maquina a 8 ruedas cuando
+     * n lo supera, que todas las acciones usen ruedas existentes (1 a 8) y
+     * que aun asi se alcance el jackpot.
+     */
+    @Test
+    public void testSolveLimitaElTamanoAlMaximoYGana()
+    {
+        SlotMachineContest contest = new SlotMachineContest();
+    
+        int[][] acciones = contest.solve(50);
+        SlotMachine maquina = contest.ultimaMaquina();
+    
+        assertEquals(8, maquina.configuration().length);
+        assertTrue(maquina.isJackpot());
+        for (int[] accion : acciones){
+            assertTrue(accion[0] >= 1 && accion[0] <= 8);
+        }
+    }
 }

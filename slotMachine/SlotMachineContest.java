@@ -11,11 +11,11 @@ import javax.swing.JOptionPane;
  * como pista para la solucion la cantidad de simbolos distintos que
  * se ven en este momento.
  *
- * @author Juan David Rojas and Cesar Morales
+ * @author Cesar Daniel Morales Sandoval
  * @version 2.1 (September 2026)
  */
 public class SlotMachineContest
-{
+{   private static final int MAX_RUEDAS = 8;
     private SlotMachine ultimaMaquina;
     /**
      * Resuelve una maquina de n ruedas y n simbolos, inicializada
@@ -27,9 +27,10 @@ public class SlotMachineContest
      * alcanzar el jackpot
      */
     public int[][] solve(int n){
-        SlotMachine maquina = new SlotMachine(n);
+        int tamaño = Math.min(n, MAX_RUEDAS);
+        SlotMachine maquina = new SlotMachine(tamaño);
         ultimaMaquina = maquina;
-        return resolver(maquina, n);
+        return resolver(maquina, tamaño);
     }
     
     /**
@@ -40,10 +41,11 @@ public class SlotMachineContest
      * @param n el numero de ruedas y de simbolos de la maquina
      */
     public void simulate(int n){
-        SlotMachine maquina = new SlotMachine(n);
+        int tamaño = Math.min(n, MAX_RUEDAS);
+        SlotMachine maquina = new SlotMachine(tamaño);
         ultimaMaquina = maquina; 
         maquina.makeVisible();
-        int[][] acciones = resolver(maquina, n);
+        int[][] acciones = resolver(maquina, tamaño);
         if (acciones.length == 0) {
             JOptionPane.showMessageDialog(null, "Con menos de dos ruedas no se puede hacer jackpot.");
         }

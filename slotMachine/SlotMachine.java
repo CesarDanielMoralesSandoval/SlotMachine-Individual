@@ -4,20 +4,26 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Collections;//Poder usar el shuffle
+import java.util.Arrays;
 import javax.swing.JOptionPane;
 /**
  * Una máquina tragamonedas que puede contener múltiples ruedas y símbolos.
  * Las ruedas pueden girarse aleatoriamente o configurarse para mostrar
  * símbolos específicos. La máquina también puede detectar cuando ocurre
  * un jackpot.
+ * 
+ * Maneja distintos tipos de ruedas (normal, lefty, rebel, mirror) y de
+ * símbolos (normal, ephemeral, shy). Cada tipo es una subclase de Wheel o
+ * de Symbol que redefine su propio comportamiento, de modo que esta clase
+ * solo le pide a cada rueda o símbolo que haga lo suyo.
  *
- * @author Juan David Rojas and César Morales
+ * @author César Daniel Morales Sandoval Morales
  * @version 1.0 (22 August 2026)
  */
 public class SlotMachine
 {
     private List<Wheel> wheels; 
-    private List<String> symbols;
+    private List<Symbol> symbols;
     private boolean visible;
     private boolean ok;
     private boolean cerrada;
@@ -36,6 +42,9 @@ public class SlotMachine
     private static final int MARGIN_Y = 30;
     private static final int GAP = 25;
     private static final int WHEEL_WIDTH = 70;
+    // Colores que se pueden usar como símbolos (los que conoce el Canvas)
+    private static final List<String> AVAILABLE_COLORS = Arrays.asList(
+        "red", "black", "blue", "yellow", "green", "white", "orange", "cyan");
     
     /**
      * Creates a new slot machine.
@@ -46,7 +55,7 @@ public class SlotMachine
      */
     public SlotMachine(){
         wheels = new ArrayList<Wheel>();
-        symbols = new ArrayList<String>();
+        symbols = new ArrayList<Symbol>();
         visible = true;
         ok = true;
         random = new Random();
@@ -161,24 +170,76 @@ public class SlotMachine
      * @param pos la posición deseada para la nueva rueda
      */
     public void addWheel(int pos)
+    {
+        addWheel("normal", pos);
+    }
+    
+    /**
+     * Agrega una nueva rueda del tipo indicado en la posición dada.
+     * Los tipos disponibles son "normal", "lefty" (al girar copia a la rueda
+     * de su izquierda), "rebel" (no se deja bloquear, intercambiar ni
+     * eliminar) y "mirror" (gira en sentido contrario). Si el tipo no existe
+     * no se agrega nada y ok() queda en false. Si la posición es mayor que el
+     * número de ruedas, la rueda se agrega al final; si es menor que uno, al
+     * principio.
+     *
+     * @param type el tipo de la rueda ("normal", "lefty", "rebel" o "mirror")
+     * @param pos la posición deseada para la nueva rueda
+     */
+    public void addWheel(String type, int pos)
     {   
         if (!isCerrada()){
-            Wheel wheel = new Wheel(symbols.size());
-            if (pos > wheels.size()){
-                wheels.add(wheel);
-                showMessage("Se agrego una rueda en la ultima posicion");
-            }
-            else if (pos < 1){
-                wheels.add(0, wheel);
-                showMessage("Se agrego una rueda en la primera posicion");
+            Wheel wheel = createWheel(type);
+            if (wheel == null){
+                showMessage("Accion no permitida: El tipo de rueda no esta disponible.");
+                ok = false;
             }
             else {
-                wheels.add(pos - 1, wheel);
+                if (pos > wheels.size()){
+                    wheels.add(wheel);
+                    showMessage("Se agrego una rueda en la ultima posicion");
+                }
+                else if (pos < 1){
+                    wheels.add(0, wheel);
+                    showMessage("Se agrego una rueda en la primera posicion");
+                }
+                else {
+                    wheels.add(pos - 1, wheel);
+                }
+                ok = true;
             }
-            ok=true;
             actualizar();
             verificarJackpot();
         }
+    }
+    
+    /**
+     * Crea una rueda del tipo indicado. Es el único lugar de la clase que
+     * conoce los tipos de rueda: para agregar un tipo nuevo basta con crear
+     * su subclase de Wheel y añadir una línea aquí.
+     *
+     * @param type el nombre del tipo (sin importar mayúsculas)
+     * @return la nueva rueda, o null si el tipo no existe
+     */
+    private Wheel createWheel(String type)
+    {
+        Wheel wheel = null;
+        if (type != null){
+            String name = type.toLowerCase();
+            if (name.equals("normal")){
+                wheel = new NormalWheel(symbols.size());
+            }
+            else if (name.equals("lefty")){
+                wheel = new LeftyWheel(symbols.size());
+            }
+            else if (name.equals("rebel")){
+                wheel = new RebelWheel(symbols.size());
+            }
+            else if (name.equals("mirror")){
+                wheel = new MirrorWheel(symbols.size());
+            }
+        }
+        return wheel;
     }
     
     /**
@@ -193,21 +254,29 @@ public class SlotMachine
     {   
         if (!isCerrada()){
             if (!wheels.isEmpty()){
-                if (pos < 1 ){
-                    wheels.get(0).makeInvisible();
-                    wheels.remove(0);
-                    showMessage("Se elimino la primera rueda");
+                int indice = pos - 1;
+                if (pos < 1){
+                    indice = 0;
                 }
                 else if (pos > wheels.size()){
-                    wheels.get(wheels.size() - 1).makeInvisible();                
-                    wheels.remove(wheels.size() - 1);
-                    showMessage("Se elimino la ultima rueda");
+                    indice = wheels.size() - 1;
                 }
-                else{
-                    wheels.get(pos - 1).makeInvisible();
-                    wheels.remove(pos - 1);
+                Wheel objetivo = wheels.get(indice);
+                if (!objetivo.canBeDeleted()){
+                    showMessage("Accion no permitida: La rueda " + (indice + 1) + " es rebelde y no se deja eliminar.");
+                    ok = false;
                 }
-                ok = true;
+                else {
+                    objetivo.makeInvisible();
+                    wheels.remove(indice);
+                    if (pos < 1){
+                        showMessage("Se elimino la primera rueda");
+                    }
+                    else if (pos > wheels.size() + 1){
+                        showMessage("Se elimino la ultima rueda");
+                    }
+                    ok = true;
+                }
             }
             else {
                 showMessage("Accion no permitida: No hay paredes para eliminar");
@@ -218,6 +287,16 @@ public class SlotMachine
         }
     }
     
+    /**
+     * Intercambia los símbolos visibles de dos ruedas. Si una posición es
+     * menor que uno se usa la primera rueda y si es mayor que el número de
+     * ruedas se usa la última, mostrando un mensaje informativo. No se
+     * intercambia (y ok() queda en false) si las dos ruedas son la misma, si
+     * alguna está bloqueada o si alguna es rebelde.
+     *
+     * @param wheel1 la posición de la primera rueda
+     * @param wheel2 la posición de la segunda rueda
+     */
     public void swap(int wheel1, int wheel2){
         if (!isCerrada()){
             if (!wheels.isEmpty()){
@@ -249,6 +328,10 @@ public class SlotMachine
                         ok = false;
                         showMessage("Accion no permitida: Una de las ruedas esta bloqueada.");
                     }
+                    else if (!wheels.get(wheel1 - 1).canBeSwapped() || !wheels.get(wheel2 - 1).canBeSwapped()){
+                        ok = false;
+                        showMessage("Accion no permitida: Una de las ruedas es rebelde y no se deja intercambiar.");
+                    }
                     else{
                         int idx1 = wheels.get(wheel1 - 1).getVisibleIndex();
                         int idx2 = wheels.get(wheel2 - 1).getVisibleIndex();                
@@ -272,12 +355,14 @@ public class SlotMachine
         }
     }
     
-    /**
+        /**
      * Bloquea la rueda indicada para que no sea modificada por los métodos
      * de giro (spin). Si la posición indicada es menor que uno, se bloquea
      * la primera rueda; si es mayor que el número de ruedas, se bloquea la
      * última, mostrando en ambos casos un mensaje informativo. La operación
-     * solo se realiza si la máquina tiene al menos una rueda.
+     * solo se realiza si la máquina tiene al menos una rueda. Una rueda
+     * rebelde no se deja bloquear: en ese caso queda sin bloquear y ok()
+     * queda en false.
      *
      * @param wheel la posición de la rueda que se desea bloquear
      */ 
@@ -296,11 +381,17 @@ public class SlotMachine
                     mensaje += "Se va a usar la ultima rueda ya que el valor dado es una rueda que esta a fuera del tamaño.\n";
                     flag = true;
                 }
-                wheels.get(wheel-1).setLocked(true);
-                ok = true;
-                if (flag){
+                if (!wheels.get(wheel - 1).canBeLocked()){
+                    ok = false;
+                    showMessage("Accion no permitida: La rueda " + wheel + " es rebelde y no se deja bloquear.");
+                }
+                else {
+                    wheels.get(wheel - 1).setLocked(true);
+                    ok = true;
+                    if (flag){
                         showMessage(mensaje);
-                    } 
+                    }
+                }
                 actualizar();
             }
             else{
@@ -362,38 +453,101 @@ public class SlotMachine
      */
     public void addSymbol(int pos, String color)
     {
+        addSymbol("normal", pos, color);
+    }
+
+    /**
+     * Agrega un nuevo símbolo del tipo indicado a la máquina en la posición
+     * dada. Los tipos disponibles son "normal", "ephemeral" (cada vez que es
+     * seleccionado en una rueda se encoge hasta quedar como un punto) y "shy"
+     * (cada vez que es seleccionado alterna entre visible e invisible).
+     * El símbolo solo se agrega si el tipo existe, el color está disponible
+     * y no hay ya un símbolo de ese color. Si la posición es mayor que el
+     * número de símbolos se agrega al final; si es menor o igual a uno, al
+     * principio.
+     *
+     * @param type el tipo del símbolo ("normal", "ephemeral" o "shy")
+     * @param pos la posición deseada para el nuevo símbolo
+     * @param color el color del símbolo. Los colores disponibles son "red",
+     * "black", "blue", "yellow", "green", "white", "orange" y "cyan".
+     */
+    public void addSymbol(String type, int pos, String color)
+    {
         if (!isCerrada()){
-            if (!color.equals("red") &&
-                !color.equals("black") &&
-                !color.equals("blue") &&
-                !color.equals("yellow") &&
-                !color.equals("green") &&
-                !color.equals("white") &&
-                !color.equals("orange") &&
-                !color.equals("cyan")){
+            Symbol symbol = createSymbol(type, color);
+            if (symbol == null){
+                showMessage("Accion no permitida: El tipo de simbolo no esta disponible.");
+                ok = false;
+            }
+            else if (!AVAILABLE_COLORS.contains(color)){
                 showMessage(
                     "Accion no permitida: El color no esta disponible.");
                 ok = false;
             }
-            else if (symbols.contains(color)){
+            else if (indexOfColor(color) != -1){
                 showMessage("Accion no permitida: El color ya se encuentra entre las opciones");
                 ok = false;
-            }        
+            }
             else {
                 if (pos > symbols.size()){
-                    symbols.add(color);
+                    symbols.add(symbol);
                 }
                 else if (pos <= 1){
-                    symbols.add(0, color);
+                    symbols.add(0, symbol);
                 }
                 else {
-                    symbols.add(pos - 1, color);
+                    symbols.add(pos - 1, symbol);
                 }
                 ok = true;
             }
             actualizar();
             verificarJackpot();
         }
+    }
+
+    /**
+     * Crea un símbolo del tipo y color indicados. Es el único lugar de la
+     * clase que conoce los tipos de símbolo: para agregar un tipo nuevo basta
+     * con crear su subclase de Symbol y añadir una línea aquí.
+     *
+     * @param type el nombre del tipo (sin importar mayúsculas)
+     * @param color el color del símbolo
+     * @return el nuevo símbolo, o null si el tipo no existe
+     */
+    private Symbol createSymbol(String type, String color)
+    {
+        Symbol symbol = null;
+        if (type != null){
+            String name = type.toLowerCase();
+            if (name.equals("normal")){
+                symbol = new NormalSymbol(color);
+            }
+            else if (name.equals("ephemeral")){
+                symbol = new EphemeralSymbol(color);
+            }
+            else if (name.equals("shy")){
+                symbol = new ShySymbol(color);
+            }
+        }
+        return symbol;
+    }
+
+    /**
+     * Busca un símbolo por su color.
+     *
+     * @param color el color buscado
+     * @return la posición (desde 0) del símbolo en la lista, o -1 si no
+     * hay ningún símbolo de ese color
+     */
+    private int indexOfColor(String color)
+    {
+        int found = -1;
+        for (int i = 0; i < symbols.size() && found == -1; i++){
+            if (symbols.get(i).getColor().equals(color)){
+                found = i;
+            }
+        }
+        return found;
     }
     
     /**
@@ -406,12 +560,13 @@ public class SlotMachine
     public void delSymbol(String color)
     {
         if (!isCerrada()){
-            int indice = symbols.indexOf(color); //Guardar el indice IA generativa
-            ok = symbols.remove(color);
+            int indice = indexOfColor(color); //Guardar el indice IA generativa
+            ok = (indice != -1);
             if (!ok){
                 showMessage("Accion no permitida: No se puede eliminar el símbolo " + color + " porque no existe.");
             }
             else {
+                symbols.remove(indice);
                 for (int i = 0; i < wheels.size(); i++){
                     int actual = wheels.get(i).getVisibleIndex();
                     if (actual == indice){
@@ -446,7 +601,7 @@ public class SlotMachine
                 actualizar();
             }
             else {
-                int index = symbols.indexOf(symbol);
+                int index = indexOfColor(symbol);
                 if (index == -1){
                     showMessage("Accion no permitida: No se encontro el simbolo porque no existe.");
                     ok = false;
@@ -459,6 +614,7 @@ public class SlotMachine
                         wheel = wheels.size();
                     }
                     wheels.get(wheel-1).setVisibleIndex(index);
+                    seleccionar(wheels.get(wheel - 1));
                     ok = true;
                     girada = true;
                     actualizar();
@@ -487,11 +643,46 @@ public class SlotMachine
         if (wheel > wheels.size()){
             wheel = wheels.size();
         }
-        if (!wheels.get(wheel - 1).isLocked()){
+        Wheel selected = wheels.get(wheel - 1);
+        if (!selected.isLocked()){
             //.nextInt es un metodo de Random que genera un número entero aleatorio
-            // entre 0 (incluido) y symbols.size() (excluido). Este metodo fue consultado desde la API de JAVA
+            // entre 0 (incluido) y symbols.size() (excluido) (Este metodo fue consultado desde la API de JAVA)
             int randomIndex = random.nextInt(symbols.size());
-            wheels.get(wheel - 1).setVisibleIndex(randomIndex);
+            // Cada tipo de rueda decide qué hacer con el índice (la lefty lo ignora y copia a su izquierda)
+            selected.turn(randomIndex, leftOf(wheel - 1));
+            seleccionar(selected);
+        }
+    }
+
+    /**
+     * Devuelve la rueda que está inmediatamente a la izquierda de la rueda
+     * en la posición dada.
+     *
+     * @param index la posición (desde 0) de la rueda en la lista
+     * @return la rueda de la izquierda, o null si es la primera rueda
+     */
+    private Wheel leftOf(int index)
+    {
+        Wheel left = null;
+        if (index > 0){
+            left = wheels.get(index - 1);
+        }
+        return left;
+    }
+
+    /**
+     * Avisa al símbolo que la rueda indicada tiene visible que fue
+     * seleccionado (los símbolos efímeros se encogen y los tímidos alternan
+     * su visibilidad). Se invoca cada vez que una rueda queda mostrando un
+     * símbolo por un giro o por colocar un símbolo en ella.
+     *
+     * @param wheel la rueda que acaba de quedar mostrando un símbolo
+     */
+    private void seleccionar(Wheel wheel)
+    {
+        int idx = wheel.getVisibleIndex();
+        if (idx >= 0 && idx < symbols.size()){
+            symbols.get(idx).select();
         }
     }
     
@@ -551,12 +742,17 @@ public class SlotMachine
             // un if-else; define dirección 1 (adelante) si los pasos son >= 0, o -1 (atrás) si son negativos.
             int direccion = (steps >= 0) ? 1 : -1;
             int pasos = Math.abs(steps);
+            Wheel izquierda = leftOf(wheel - 1);
             for (int i = 0; i < pasos; i++){
-                selected.rotate(direccion, symbols.size());
+                selected.rotate(direccion, symbols.size(), izquierda);
                 if (visible){
                     actualizar();
                     Canvas.getCanvas().wait(100);
                 }
+            }
+            if (pasos > 0){
+                seleccionar(selected);
+                actualizar();
             }
             girada = true;
             ok = true;
@@ -588,7 +784,7 @@ public class SlotMachine
             else {
                 boolean allValid = true;
                 for (int i = 0; i < setSymbols.length; i++){
-                    if (!symbols.contains(setSymbols[i])){
+                    if (indexOfColor(setSymbols[i]) == -1){
                         allValid = false;
                     }
                 }
@@ -602,8 +798,9 @@ public class SlotMachine
                     String mensaje = "Se completo la accion";
                     for (int i = 0; i < setSymbols.length; i++){
                         if (!wheels.get(i).isLocked()){
-                            int index = symbols.indexOf(setSymbols[i]);
+                            int index = indexOfColor(setSymbols[i]);
                             wheels.get(i).setVisibleIndex(index);
+                            seleccionar(wheels.get(i));
                         }
                         else {
                             mensaje += ", excepto para la rueda numero " + (i + 1) + " porque esta bloqueada";
@@ -655,7 +852,88 @@ public class SlotMachine
     // Este método convierte la lista de símbolos en un arreglo de tipo String[].
     public String[] symbols()
     {
-        return symbols.toArray(new String[symbols.size()]);
+        String[] colors = new String[symbols.size()];
+        for (int i = 0; i < symbols.size(); i++){
+            colors[i] = symbols.get(i).getColor();
+        }
+        return colors;
+    }
+
+    /**
+     * Obtiene el tipo de cada rueda de la máquina, en el mismo orden de las
+     * ruedas.
+     *
+     * @return un arreglo con "normal", "lefty", "rebel" o "mirror" por cada
+     * rueda, o null si la máquina está cerrada
+     */
+    public String[] wheelTypes()
+    {
+        if (!isCerrada()){
+            String[] types = new String[wheels.size()];
+            for (int i = 0; i < wheels.size(); i++){
+                types[i] = wheels.get(i).getType();
+            }
+            return types;
+        }
+        else {
+            return null;
+        }
+    }
+
+    /**
+     * Obtiene el tipo de cada símbolo de la máquina, en el mismo orden que
+     * devuelve symbols().
+     *
+     * @return un arreglo con "normal", "ephemeral" o "shy" por cada símbolo,
+     * o null si la máquina está cerrada
+     */
+    public String[] symbolTypes()
+    {
+        if (!isCerrada()){
+            String[] types = new String[symbols.size()];
+            for (int i = 0; i < symbols.size(); i++){
+                types[i] = symbols.get(i).getType();
+            }
+            return types;
+        }
+        else {
+            return null;
+        }
+    }
+
+    /**
+     * Devuelve el objeto rueda de la posición dada. Es de acceso de paquete
+     * porque solo lo usan las clases de prueba para inspeccionar el estado
+     * interno (por ejemplo, el tipo concreto de una rueda).
+     *
+     * @param pos la posición de la rueda (desde 1)
+     * @return la rueda, o null si la posición no existe
+     */
+    //idea de la IA Generativa
+    Wheel wheelAt(int pos)
+    {
+        if (pos < 1 || pos > wheels.size()){
+            return null;
+        }
+        return wheels.get(pos - 1);
+    }
+    
+    /**
+     * Devuelve el objeto símbolo del color dado. Es de acceso de paquete
+     * porque solo lo usan las clases de prueba para inspeccionar el estado
+     * interno (por ejemplo, el tamaño de un símbolo efímero).
+     *
+     * @param color el color del símbolo
+     * @return el símbolo, o null si no existe
+     */
+    //idea de la IA Generativa
+    Symbol symbolOf(String color)
+    {
+        int index = indexOfColor(color);
+        if (index == -1){
+            return null;
+        }
+        return symbols.get(index);
     }
     
     /**
@@ -673,7 +951,7 @@ public class SlotMachine
             for (int i = 0; i < wheels.size(); i++){
                 if (!symbols.isEmpty()){
                     int idx = wheels.get(i).getVisibleIndex();
-                    config[i] = symbols.get(idx);
+                    config[i] = symbols.get(idx).getColor();
                 }
                 else{
                     config[i] = null; 
@@ -729,7 +1007,7 @@ public class SlotMachine
                 wheels.get(i).setPosition(MARGIN_X + GAP + i * (WHEEL_WIDTH + GAP), MARGIN_Y + 25);
                 if (!symbols.isEmpty()){
                     int idx = wheels.get(i).getVisibleIndex();
-                    wheels.get(i).changeColor(symbols.get(idx));
+                    wheels.get(i).showSymbol(symbols.get(idx));
                 }
             }
         }
@@ -836,7 +1114,7 @@ public class SlotMachine
      */
     private void pintarCelebracion(boolean celebrando){
         if (figurasCreadas && visible){
-            String colorCuerpo = celebrando ? "green" : "gray"; //Operador ternario idea de IA para dismuir codigo
+            String colorCuerpo = celebrando ? "green" : "gray";
             String colorPerilla = celebrando ? "yellow" : "red";
             machine.changeColor(colorCuerpo);
             brazoHorizontal.changeColor(colorCuerpo);
@@ -846,7 +1124,7 @@ public class SlotMachine
             if (!symbols.isEmpty()){
                 for (int i = 0; i < wheels.size(); i++){
                     int idx = wheels.get(i).getVisibleIndex();
-                    wheels.get(i).changeColor(symbols.get(idx));
+                    wheels.get(i).showSymbol(symbols.get(idx));
                     wheels.get(i).makeVisible(true);
                 }
             }

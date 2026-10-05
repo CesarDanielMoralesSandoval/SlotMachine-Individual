@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Clase de pruebas unitarias para SlotMachine.
- * Verifica el comportamiento del ciclo 1 y 2: agregar/eliminar ruedas y
+ * Verifica el comportamiento del ciclo 1, 2 y 3: agregar/eliminar ruedas y
  * símbolos, ubicar y girar símbolos, bloqueo/desbloqueo de ruedas, y
  * detección de jackpot, incluyendo los casos límites en las posiciones
  * fuera de rango para revisar como esta validando esos datos el sistema.
